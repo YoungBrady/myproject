@@ -176,56 +176,18 @@ def get_all_callIn(client, raw_dir, callIn_path):
         sys.exit(0)
 
 
-def generate_prop_for_node(funcid, node):
+def generate_prop_for_node(node):
     # 为每一个结点创建属性字典，funcid是该结点所在的函数的结点id，node是id2node中包含结点全部信息的字典
     # 每个结点记录funcid、code、lineNumber、lineNumberEnd、columnNumber、columnNumberEnd、id、_label、callee_id等信息
     prop = dict()
-    prop['funcid'] = funcid
-    if 'code' in node:
-        prop['code'] = node['code']
-    else:
-        prop['code'] = None
 
-    if 'lineNumber' in node:
-        prop['lineNumber'] = node['lineNumber']
-    else:
-        prop['lineNumber'] = None
-
-    if 'lineNumberEnd' in node:
-        prop['lineNumberEnd'] = node['lineNumberEnd']
-    else:
-        prop['lineNumberEnd'] = None
-
-    if 'columnNumber' in node:
-        prop['columnNumber'] = node['columnNumber']
-    else:
-        prop['columnNumber'] = None
-
-    if 'columnNumberEnd' in node:
-        prop['columnNumberEnd'] = node['columnNumberEnd']
-    else:
-        prop['columnNumberEnd'] = None
-
-    if 'id' in node:
-        prop['id'] = str(node['id'])
-    else:
-        prop['id'] = None
-
-    if '_label' in node:
-        prop['_label'] = node['_label']
-    else:
-        prop['_label'] = None
-
-    if 'callee_id' in node:
-        prop['callee_id'] = node['callee_id']
-    else:
-        prop['callee_id'] = None
-
-    if 'typeFullName' in node:
-        prop['typeFullName'] = node['typeFullName']
-    else:
-        prop['typeFullName'] = None
-
+    properties = ['funcid', 'code', 'lineNumber', 'lineNumberEnd', 'columnNumber',
+                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'methodFullName']
+    for key in properties:
+        if key in node:
+            prop[key] = node[key]
+        else:
+            prop[key] = None
     return prop
 
 
@@ -250,6 +212,7 @@ def complete_graph(dot_dict, id2node, callee_dict, graph_db_dir, type):
             # 加入所有结点
             for node in nodes:
                 id = json.loads(node.get_name())
+                id2node[id]['funcid'] = func_id
                 if type == 'pdg':
                     if id2node[id]["_label"] == "CALL" and id2node[id]["name"].find("<operator>.") == -1:
                         if id in callee_dict:
@@ -257,7 +220,7 @@ def complete_graph(dot_dict, id2node, callee_dict, graph_db_dir, type):
                         else:
                             print(id+"\terror")
                     id2node[id]['IsPdgNode'] = True
-                prop = generate_prop_for_node(func_id, id2node[id])
+                prop = generate_prop_for_node(id2node[id])
                 if type == 'ast':
                     if'IsPdgNode' in id2node[id]:
                         prop['IsPdgNode'] = id2node[id]['IsPdgNode']
