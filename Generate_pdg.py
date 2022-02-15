@@ -143,13 +143,13 @@ def get_all_callee(client, callee_path):
         sys.exit(0)
 
 
-def get_all_callIn(client, raw_dir, callIn_path):
+def get_all_callIn(client, raw_dir, callIn_path, call_info_dir):
     # raw_dir是源代码目录，是为了筛选在源代码目录里的method
     # callIn_path是产生的中间文件的路径
     # 该函数返回一个字典，字典的内容格式：{funcid:[(调用该函数的函数id,调用发生的结点id)]}
     # 仅记录了被其他函数调用的函数的信息
 
-    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\")).map(c =>(c.id,c.callIn.map(d => (d.method.id,d.id)).toJson)).toJson |>\"{callIn_path}\""
+    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\")).filterNot(node => node.name.contains(\"<operator>\")).map(c =>(c.id,c.callIn.map(d => (d.method.id,d.id)).toJson)).toJson |>\"{callIn_path}\""
     # print(query)
     try:
         result = client.execute(query)
@@ -168,6 +168,9 @@ def get_all_callIn(client, raw_dir, callIn_path):
                 callIn_dict[str(id)] = callIn_list
             # callee_dict[str(id)] = str(callee_id)
         print("-----getting all callIn successfully!-----")
+        call_info_file = call_info_dir+"/callIn_dict.pkl"
+        with open(call_info_file, "wb+")as f1:
+            pickle.dump(callIn_dict, f1)
         return callIn_dict
 
     except Exception as e:
@@ -182,7 +185,7 @@ def generate_prop_for_node(node):
     prop = dict()
 
     properties = ['funcid', 'code', 'lineNumber', 'lineNumberEnd', 'columnNumber',
-                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'methodFullName']
+                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'fullName']
     for key in properties:
         if key in node:
             prop[key] = node[key]
@@ -276,8 +279,11 @@ if __name__ == '__main__':
     client = connect_server()  # 需提前运行./joern --server
     import_souce(client, bin_path)  # 导入bin文件到服务器
 
+    call_info_dir = cwd_dir+"/call_info"  # 该文件夹用来存储callIn信息
+    if(os.path.exists(call_info_dir) == False):
+        os.mkdir(call_info_dir)
     callIn_path = intermediate_dir+"/callIn.json"  # 存储callIn信息的json文件
-    callIn_dict = get_all_callIn(client, raw_dir, callIn_path)
+    callIn_dict = get_all_callIn(client, raw_dir, callIn_path, call_info_dir)
 
     node_list_path = intermediate_dir + "/allnodes.json"  # 存储所有结点的json文件
     id2node = get_all_nodes(client, node_list_path)
