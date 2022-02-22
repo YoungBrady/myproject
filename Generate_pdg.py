@@ -185,7 +185,7 @@ def generate_prop_for_node(node):
     prop = dict()
 
     properties = ['funcid', 'code', 'lineNumber', 'lineNumberEnd', 'columnNumber',
-                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'name']
+                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'name', 'filename']
     for key in properties:
         if key in node:
             prop[key] = node[key]
@@ -206,6 +206,7 @@ def complete_graph(dot_dict, id2node, callee_dict, graph_db_dir, type):
         for func_id in dot_dict:
 
             func_name = id2node[func_id]['name']
+            filename = id2node[func_id]['filename']
             dot_g = dot_dict[func_id]
 
             nodes = dot_g.get_nodes()
@@ -217,6 +218,8 @@ def complete_graph(dot_dict, id2node, callee_dict, graph_db_dir, type):
             for node in nodes:
                 id = json.loads(node.get_name())
                 id2node[id]['funcid'] = func_id
+                id2node[id]['filename'] = filename
+                id2node[id]['id'] = str(id2node[id]['id'])
                 if type == 'pdg':
                     if id2node[id]["_label"] == "CALL" and id2node[id]["name"].find("<operator>.") == -1:
                         if id in callee_dict:
