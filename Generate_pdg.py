@@ -185,12 +185,13 @@ def generate_prop_for_node(node):
     prop = dict()
 
     properties = ['funcid', 'code', 'lineNumber', 'lineNumberEnd', 'columnNumber',
-                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'fullName']
+                  'columnNumberEnd', 'id', '_label', 'callee_id', 'typeFullName', 'name']
     for key in properties:
         if key in node:
             prop[key] = node[key]
         else:
             prop[key] = None
+    prop['Name'] = prop.pop('name')  # 因为igraph加入键值的时候会默认有一个'name',所以改成'Name'
     return prop
 
 
