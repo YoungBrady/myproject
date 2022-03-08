@@ -324,8 +324,8 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
                 continue
             add_local_to_pdg(func_id, pdg, ast, m2l2i_dict[func_id], id2node)
 
-            pdg.es["curved"] = False  # 解决Attribute does not exist问题
-            igraph.plot(pdg, vertex_label=pdg.vs['code'])
+            # pdg.es["curved"] = False  # 解决Attribute does not exist问题
+            # igraph.plot(pdg, vertex_label=pdg.vs['code'])
             func_file_path = id2node[func_id]['filename']
             func_name = id2node[func_id]['name']
             func_file_dir, func_file_name = os.path.split(func_file_path)
@@ -465,9 +465,3 @@ if __name__ == '__main__':
     # complete_graph(ast_dict, id2node, callee_dict, graph_db_dir, "ast")
 
     # joern_parse(joern_parse_dir,raw_dir,bin_path)
-
-
-# 待完成：
-# 1 处理call相关信息的存储目录
-# 2 过滤函数声明的结点
-# 3 统一id的类型
