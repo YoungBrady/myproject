@@ -10,6 +10,13 @@ import pydot
 import sys
 
 
+def print_process(name, now, sum):
+    print("\r", end="")
+    print(f"{name} progress: {now*100 // sum}% ",
+          "▋" * (now*100 // sum//2), end="")
+    sys.stdout.flush()
+
+
 def joern_parse(joern_parse_dir, indir, outdir):
     # indir是源代码目录，joern会解析该目录下的所有源文件
     # joern_parse_dir是joern-parse所在的目录，一般为joern根目录
@@ -47,15 +54,18 @@ def import_souce(client, file_path):
 
     # query = open_query(file_path) 考虑兼容性，使用下面的查询指令
     query = f'importCpg(\"{file_path}\")'
-
-    result = client.execute(query)
-    if result['stderr'].find('java') != -1:
-        print('joern server error:'+result['stderr'])
+    try:
+        result = client.execute(query)
+        if result['stderr'].find('java') != -1:
+            print('joern server error:'+result['stderr'])
+            sys.exit(0)
+        else:
+            print("import_souce progress: {}%: ".format(
+                100), "▋" * (50))
+    except Exception as e:
+        print("-----import souce nodes failed!-----")
+        print(e)
         sys.exit(0)
-    else:
-        print("import_souce progress: {}%: ".format(
-            100), "▋" * (50))
-
     # query = 'run.ossdataflow' 一般来说，使用joern-parse生成bin文件之后，数据流处理自动完成，如果在运行时出问题，可再运行下面的指令
     # result = client.execute(query)
     # print(result['stdout'])
@@ -81,10 +91,11 @@ def get_all_nodes(client, node_list_path):
             # 将结点的id全部改成字符串类型，主要是igraph直接使用数字id会出bug
             node['id'] = str(node['id'])
             id2node[str(node['id'])] = node
-            print("\r", end="")
-            print("get_all_nodes progress: {}%: ".format(
-                (i+1)*100 // len(node_list)), "▋" * ((i+1)*100 // len(node_list)//2), end="")
-            sys.stdout.flush()
+            print_process('get_all_nodes', i+1, len(node_list))
+            # print("\r", end="")
+            # print("get_all_nodes progress: {}%: ".format(
+            #     (i+1)*100 // len(node_list)), "▋" * ((i+1)*100 // len(node_list)//2), end="")
+            # sys.stdout.flush()
 
         # print("-----getting all nodes successfully!-----")
         print("\r")
@@ -137,11 +148,11 @@ def get_all_dotfile(client, raw_dir, dotfile_path, id2node):
                 pdg_dict[func_id] = dot_pdg
             if dot_ast != None:
                 ast_dict[func_id] = dot_ast
-
-            print("\r", end="")
-            print("get_all_dotfile progress: {}%: ".format(
-                (i+1)*100 // len(dot_list)), "▋" * ((i+1)*100 // len(dot_list) // 2), end="")
-            sys.stdout.flush()
+            print_process('get_all_dotfile', i+1, len(dot_list))
+            # print("\r", end="")
+            # print("get_all_dotfile progress: {}%: ".format(
+            #     (i+1)*100 // len(dot_list)), "▋" * ((i+1)*100 // len(dot_list) // 2), end="")
+            # sys.stdout.flush()
         # print("-----getting all dot file successfully!-----")
         print("\r")
         return pdg_dict, ast_dict
@@ -174,10 +185,11 @@ def get_all_callee(client, callee_path):
             callee_dict[id] = str(callee_id)
             # callee_id = json.loads(tup[1])[0]
             # callee_dict[str(id)] = str(callee_id)
-            print("\r", end="")
-            print("get_all_callee progress: {}%: ".format(
-                (i+1)*100 // len(callee_list)), "▋" * ((i+1)*100 // len(callee_list) // 2), end="")
-            sys.stdout.flush()
+            print_process('get_all_callee', i+1, len(callee_list))
+            # print("\r", end="")
+            # print("get_all_callee progress: {}%: ".format(
+            #     (i+1)*100 // len(callee_list)), "▋" * ((i+1)*100 // len(callee_list) // 2), end="")
+            # sys.stdout.flush()
 
         # print("-----getting all callee successfully!-----")
         print("\r")
@@ -220,10 +232,11 @@ def get_all_callIn(client, raw_dir, callIn_path, call_info_dir):
             for j in range(len(list_t[1])):
                 list_t[1][j] = [str(id) for id in list_t[1][j]]
             callIn_dict[func_id] = list_t[1]
-            print("\r", end="")
-            print("get_all_callIn progress: {}%: ".format(
-                (i+1)*100 // len(callIn_list)), "▋" * ((i+1)*100 // len(callIn_list) // 2), end="")
-            sys.stdout.flush()
+            print_process('get_all_callIn', i+1, len(callIn_list))
+            # print("\r", end="")
+            # print("get_all_callIn progress: {}%: ".format(
+            #     (i+1)*100 // len(callIn_list)), "▋" * ((i+1)*100 // len(callIn_list) // 2), end="")
+            # sys.stdout.flush()
         # print("-----getting all callIn successfully!-----")
         call_info_file = call_info_dir+"/callIn_dict.pkl"
         with open(call_info_file, "wb+")as f1:
@@ -286,10 +299,11 @@ def get_all_local_identifier(client, local2identifier_path):
                 l2i[1] = [str(identifier_id) for identifier_id in l2i[1]]
                 l2i_dict[local_id] = l2i[1]
             m2l2i_dict[func_id] = l2i_dict
-            print("\r", end="")
-            print("get_all_local_identifier progress: {}%: ".format(
-                (i+1)*100 // len(m2l2i_list)), "▋" * ((i+1)*100 // len(m2l2i_list) // 2), end="")
-            sys.stdout.flush()
+            print_process('get_all_local_identifier', i+1, len(m2l2i_list))
+            # print("\r", end="")
+            # print("get_all_local_identifier progress: {}%: ".format(
+            #     (i+1)*100 // len(m2l2i_list)), "▋" * ((i+1)*100 // len(m2l2i_list) // 2), end="")
+            # sys.stdout.flush()
         # print("-----getting all method_local_identifier successfully!-----")
         print("\r")
         return m2l2i_dict
@@ -395,12 +409,16 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
             pdg = draw_graph(
                 func_id, pdg_dict[func_id], id2node, callee_dict, "pdg")
             if pdg == -1:
+                print_process('complete_graph', i+1, len(pdg_dict))
+                i += 1
                 continue
 
             ast = draw_graph(
                 func_id, ast_dict[func_id], id2node, callee_dict, "ast")
 
             if not m2l2i_dict[func_id]:
+                print_process('complete_graph', i+1, len(pdg_dict))
+                i += 1
                 continue
             add_local_to_pdg(func_id, pdg, ast, m2l2i_dict[func_id], id2node)
 
@@ -425,85 +443,19 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
             # print(pdg_file_path)
             with open(ast_file_path, "wb+")as f1:
                 pickle.dump(ast, f1)
-
-            print("\r", end="")
-            print("complete_graph progress: {}%: ".format(
-                (i+1)*100 // len(pdg_dict)), "▋" * ((i+1)*100 // len(pdg_dict) // 2), end="")
-            sys.stdout.flush()
+            print_process('complete_graph', i+1, len(pdg_dict))
             i += 1
+            # print("\r", end="")
+            # print("complete_graph progress: {}%: ".format(
+            #     (i+1)*100 // len(pdg_dict)), "▋" * ((i+1)*100 // len(pdg_dict) // 2), end="")
+            # sys.stdout.flush()
+            # i += 1
         print('\r')
         # print(f"-----completing pdg、ast successfully!-----")
     except Exception as e:
         print(f"-----completing pdg、ast failed!-----")
         print(e)
         sys.exit(0)
-
-
-# def complete_graph(dot_dict, id2node, callee_dict, graph_db_dir, type):
-#     # dot_dict
-#     # id2node 存储所有结点信息的字典
-#     # callee_dict 存储所有callee信息的字典
-#     # graph_db_dir 存储生成的pdg、ast信息的目录
-#     # 每个pdg生成一个igraph对象并存储在pkl文件中，对于pdg中的call结点，还会记录其callee信息，最终每个pkl的文件名为funcname_funcid
-#     # 每个ast文件同样如此
-#     try:
-#         for func_id in dot_dict:
-
-#             func_name = id2node[func_id]['name']
-#             filename = id2node[func_id]['filename']
-#             dot_g = dot_dict[func_id]
-
-#             nodes = dot_g.get_nodes()
-#             if len(nodes) == 0:
-#                 continue
-#             g = Graph(directed=True)
-#             edges = dot_g.get_edges()
-#             # 加入所有结点
-#             for node in nodes:
-#                 id = json.loads(node.get_name())
-#                 id2node[id]['funcid'] = func_id
-#                 id2node[id]['filename'] = filename
-#                 id2node[id]['id'] = str(id2node[id]['id'])
-#                 if type == 'pdg':
-#                     if id2node[id]["_label"] == "CALL" and id2node[id]["name"].find("<operator>.") == -1:
-#                         if id in callee_dict:
-#                             id2node[id]["callee_id"] = callee_dict[id]
-#                         else:
-#                             print(id+"\terror")
-#                     id2node[id]['IsPdgNode'] = True
-#                 prop = generate_prop_for_node(id2node[id])
-#                 if type == 'ast':
-#                     if'IsPdgNode' in id2node[id]:
-#                         prop['IsPdgNode'] = id2node[id]['IsPdgNode']
-#                     else:
-#                         prop['IsPdgNode'] = False
-
-#                 g.add_vertex(id, **prop)
-
-#             # 加入所有边
-#             for edge in edges:
-#                 start_node_id = json.loads(edge.get_source())
-#                 end_node_id = json.loads(edge.get_destination())
-#                 g.add_edge(start_node_id, end_node_id, **
-#                            (edge.obj_dict['attributes']))
-#             # func_id = json.loads(nodes[0].get_name())
-
-#             func_file_path = id2node[func_id]['filename']
-#             func_file_dir, func_file_name = os.path.split(func_file_path)
-#             index = func_file_dir.find('/raw')
-#             pkl_dir = graph_db_dir+func_file_dir[index+4:]
-#             pkl_dir = f"{pkl_dir}/{type}"
-#             if os.path.exists(pkl_dir) == False:
-#                 os.makedirs(pkl_dir)
-#             pdg_file_path = pkl_dir+f"/{func_name}_{func_id}.pkl"
-#             # print(pdg_file_path)
-#             with open(pdg_file_path, "wb+")as f1:
-#                 pickle.dump(g, f1)
-#         print(f"-----completing {type} successfully!-----")
-#     except Exception as e:
-#         print(f"-----completing {type} failed!-----")
-#         print(e)
-#         sys.exit(0)
 
 
 if __name__ == '__main__':
