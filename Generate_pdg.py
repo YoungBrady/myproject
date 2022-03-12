@@ -22,7 +22,9 @@ def joern_parse(joern_parse_dir, indir, outdir):
     print(f'sh {joern_parse_dir} {indir} -o {outdir}')
     ret = os.system(f'sh {joern_parse_dir} {indir} -o {outdir}')
     if ret == 0:
-        print("-----joern parsing successfully!-----")
+        print("joern_parse progress: {}%: ".format(100), "▋" * (50))
+
+        # print("-----joern parsing successfully!-----")
     else:
         print("-----joern parsing failed!-----")
         sys.exit(0)
@@ -45,13 +47,14 @@ def import_souce(client, file_path):
 
     # query = open_query(file_path) 考虑兼容性，使用下面的查询指令
     query = f'importCpg(\"{file_path}\")'
-    try:
-        result = client.execute(query)
-        print("-----importing code successfully!-----")
-    except Exception as e:
-        print("-----importing code failed!-----")
-        print(e)
+
+    result = client.execute(query)
+    if result['stderr'].find('java') != -1:
+        print('joern server error:'+result['stderr'])
         sys.exit(0)
+    else:
+        print("import_souce progress: {}%: ".format(
+            100), "▋" * (50))
 
     # query = 'run.ossdataflow' 一般来说，使用joern-parse生成bin文件之后，数据流处理自动完成，如果在运行时出问题，可再运行下面的指令
     # result = client.execute(query)
@@ -65,13 +68,26 @@ def get_all_nodes(client, node_list_path):
     # print(query)
     try:
         result = client.execute(query)
+        # print('client:'+result['stderr'])
+        if result['stderr'].find('java') != -1:
+            print('joern server error:'+result['stderr'])
+            sys.exit(0)
         with open(node_list_path)as f:
             node_list = json.load(f)
         id2node = dict()  # 该字典使用id作为key,对应结点信息作为内容
-        for node in node_list:
-            id2node[str(node['id'])] = node
 
-        print("-----getting all nodes successfully!-----")
+        for i in range(len(node_list)):
+            node = node_list[i]
+            # 将结点的id全部改成字符串类型，主要是igraph直接使用数字id会出bug
+            node['id'] = str(node['id'])
+            id2node[str(node['id'])] = node
+            print("\r", end="")
+            print("get_all_nodes progress: {}%: ".format(
+                (i+1)*100 // len(node_list)), "▋" * ((i+1)*100 // len(node_list)//2), end="")
+            sys.stdout.flush()
+
+        # print("-----getting all nodes successfully!-----")
+        print("\r")
         return id2node
 
     except Exception as e:
@@ -86,32 +102,48 @@ def get_all_dotfile(client, raw_dir, dotfile_path, id2node):
     # dotpdg_path 生成的存储dot文件的json文件路径
     # 该函数返回个字典，key:函数id 内容：该函数的pdg dot
 
-    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\")&& node.lineNumber!=node.lineNumberEnd).filterNot(node => node.name.contains(\"<\")).map(node => (node.id,node.dotPdg.toJson,node.dotAst.toJson)).toJson |>\"{dotfile_path}\""
+    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
+    .filterNot(node => node.name.contains(\"<\"))\
+    .filterNot(node => node.lineNumber==node.lineNumberEnd)\
+    .filterNot(node => node.lineNumber==None)\
+    .filterNot(node => node.lineNumberEnd==None)\
+    .filterNot(node => node.columnNumber==None)\
+    .filterNot(node => node.columnNumberEnd==None)\
+    .map(node => List(node.id,node.dotPdg.l,node.dotAst.l)).toJson |>\"{dotfile_path}\""
     # query = f"cpg.method.map(c => (c.id,c.dotPdg.toJson)).toJson |>\"{dotpdg_path}\""
     # print(query)
     try:
         result = client.execute(query)
+        # print('client:'+result['stderr'])
+        if result['stderr'].find('java') != -1:
+            print('joern server error:'+result['stderr'])
+            sys.exit(0)
+
         with open(dotfile_path)as f:
             dot_list = json.load(f)
         pdg_dict = dict()
         ast_dict = dict()
-        # i = 0
-        for dot in dot_list:
-            func_id = str(dot['_1'])
-            if ('columnNumber' in id2node[func_id]) == False or ('lineNumber' in id2node[func_id]) == False:
-                continue  # 过滤没有行号或列号的函数的pdg或ast
-            dotpdg_str = json.loads(dot['_2'])[0]
+
+        for i in range(len(dot_list)):
+            dot = dot_list[i]
+            func_id = str(dot[0])
+            # if ('columnNumber' in id2node[func_id]) == False or ('lineNumber' in id2node[func_id]) == False:
+            # continue  # 过滤没有行号或列号的函数的pdg或ast
+            dotpdg_str = dot[1][0]
             dot_pdg = pydot.graph_from_dot_data(dotpdg_str)[0]
-            dotast_str = json.loads(dot['_3'])[0]
+            dotast_str = dot[2][0]
             dot_ast = pydot.graph_from_dot_data(dotast_str)[0]
             if dot_pdg != None:
                 pdg_dict[func_id] = dot_pdg
             if dot_ast != None:
                 ast_dict[func_id] = dot_ast
-            # print(func_id)
-            # i+=1
-            # if i>100:break
-        print("-----getting all dot file successfully!-----")
+
+            print("\r", end="")
+            print("get_all_dotfile progress: {}%: ".format(
+                (i+1)*100 // len(dot_list)), "▋" * ((i+1)*100 // len(dot_list) // 2), end="")
+            sys.stdout.flush()
+        # print("-----getting all dot file successfully!-----")
+        print("\r")
         return pdg_dict, ast_dict
 
     except Exception as e:
@@ -123,18 +155,32 @@ def get_all_dotfile(client, raw_dir, dotfile_path, id2node):
 def get_all_callee(client, callee_path):
     # callee_path 是存储callee信息的json文件路径
     # 该函数返回一个字典，key:caller id 内容callee id
-    query = f"cpg.call.filterNot(node => node.name.contains(\"<\")).map(c => (c.id,c.callee.id.toJson)).toJson |>\"{callee_path}\""
+    query = f"cpg.call.filterNot(node => node.name.contains(\"<\")).map(c => List(c.id,c.callee.id.l)).toJson |>\"{callee_path}\""
     # print(query)
     try:
         result = client.execute(query)
+        if result['stderr'].find('java') != -1:
+            print('joern server error:'+result['stderr'])
+            sys.exit(0)
+
         with open(callee_path)as f:
             callee_list = json.load(f)
         callee_dict = dict()
-        for tup in callee_list:
-            id = tup['_1']
-            callee_id = json.loads(tup['_2'])[0]
-            callee_dict[str(id)] = str(callee_id)
-        print("-----getting all callee successfully!-----")
+        for i in range(len(callee_list)):
+            # for list_t in callee_list:
+            list_t = callee_list[i]
+            id = str(list_t[0])
+            callee_id = list_t[1][0]
+            callee_dict[id] = str(callee_id)
+            # callee_id = json.loads(tup[1])[0]
+            # callee_dict[str(id)] = str(callee_id)
+            print("\r", end="")
+            print("get_all_callee progress: {}%: ".format(
+                (i+1)*100 // len(callee_list)), "▋" * ((i+1)*100 // len(callee_list) // 2), end="")
+            sys.stdout.flush()
+
+        # print("-----getting all callee successfully!-----")
+        print("\r")
         return callee_dict
 
     except Exception as e:
@@ -146,31 +192,43 @@ def get_all_callee(client, callee_path):
 def get_all_callIn(client, raw_dir, callIn_path, call_info_dir):
     # raw_dir是源代码目录，是为了筛选在源代码目录里的method
     # callIn_path是产生的中间文件的路径
-    # 该函数返回一个字典，字典的内容格式：{funcid:[(调用该函数的函数id,调用发生的结点id)]}
-    # 仅记录了被其他函数调用的函数的信息
+    # 该函数返回一个字典，字典的内容格式：{funcid:[[调用该函数的函数id,调用发生的结点id]]}
+    # 存在funcid对应的内容为空的情况，即{funcid:[]}
 
-    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\")).filterNot(node => node.name.contains(\"<\")).map(c =>(c.id,c.callIn.map(d => (d.method.id,d.id)).toJson)).toJson |>\"{callIn_path}\""
+    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
+    .filterNot(node => node.name.contains(\"<\"))\
+    .filterNot(node => node.lineNumber==node.lineNumberEnd)\
+    .filterNot(node => node.lineNumber==None)\
+    .filterNot(node => node.lineNumberEnd==None)\
+    .filterNot(node => node.columnNumber==None)\
+    .filterNot(node => node.columnNumberEnd==None)\
+    .map(c =>List(c.id,c.callIn.map(d => List(d.method.id,d.id)).l)).toJson |>\"{callIn_path}\""
     # print(query)
+    # 筛选raw文件夹中的函数、筛选掉函数名中包含<的（一般为joern自己加的）、函数声明结点（即行开始和结束号相同的）、函数行列号不存在的
     try:
         result = client.execute(query)
+        if result['stderr'].find('java') != -1:
+            print('joern server error:'+result['stderr'])
+            sys.exit(0)
         with open(callIn_path)as f:
             callIn_list = json.load(f)
         callIn_dict = dict()
-        for tup in callIn_list:
-            id = tup['_1']
-            callIn_list_t = json.loads(tup['_2'])
-            if len(callIn_list_t) != 0:
-                # print(callIn_list_t)
-                callIn_list = list()
-                for callIn_dict_t in callIn_list_t:
-                    callIn_list.append(
-                        (str(callIn_dict_t['_1$mcJ$sp']), str(callIn_dict_t['_2$mcJ$sp'])))
-                callIn_dict[str(id)] = callIn_list
-            # callee_dict[str(id)] = str(callee_id)
-        print("-----getting all callIn successfully!-----")
+        for i in range(len(callIn_list)):
+            list_t = callIn_list[i]
+        # for list_t in callIn_list:
+            func_id = str(list_t[0])
+            for j in range(len(list_t[1])):
+                list_t[1][j] = [str(id) for id in list_t[1][j]]
+            callIn_dict[func_id] = list_t[1]
+            print("\r", end="")
+            print("get_all_callIn progress: {}%: ".format(
+                (i+1)*100 // len(callIn_list)), "▋" * ((i+1)*100 // len(callIn_list) // 2), end="")
+            sys.stdout.flush()
+        # print("-----getting all callIn successfully!-----")
         call_info_file = call_info_dir+"/callIn_dict.pkl"
         with open(call_info_file, "wb+")as f1:
             pickle.dump(callIn_dict, f1)
+        print("\r")
         return callIn_dict
 
     except Exception as e:
@@ -199,22 +257,41 @@ def get_all_local_identifier(client, local2identifier_path):
     # 获得所有local结点对应的identifier结点
     # local2identifier_path是临时文件的存储路径
     # 该函数返回一个字典，其格式如下：{func_id:{local_id:[identifier_id]}}
-    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\") && node.lineNumber!=node.lineNumberEnd).filterNot(node => node.name.contains(\"<\")).map(c =>Map(c.id->c.local.map(d =>Map(d.id->d.referencingIdentifiers.id.l)).l)).toJson |>\"{local2identifier_path}\""
+    # 存在key值对应字典为空的情况，即{func_id:{}}，使用时需注意
+    query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
+    .filterNot(node => node.name.contains(\"<\"))\
+    .filterNot(node => node.lineNumber==node.lineNumberEnd)\
+    .filterNot(node => node.lineNumber==None)\
+    .filterNot(node => node.lineNumberEnd==None)\
+    .filterNot(node => node.columnNumber==None)\
+    .filterNot(node => node.columnNumberEnd==None)\
+    .map(c =>List(c.id,c.local.map(d =>List(d.id,d.referencingIdentifiers.id.l)).l)).toJson |>\"{local2identifier_path}\""
     try:
         result = client.execute(query)
+        if result['stderr'].find('java') != -1:
+            print('joern server error:'+result['stderr'])
+            sys.exit(0)
         with open(local2identifier_path)as f:
-            m2l2i_dict_list = json.load(f)
+            m2l2i_list = json.load(f)
         m2l2i_dict = dict()
 
-        for m2l2i in m2l2i_dict_list:  # 列表中每一个元素是一个只有一个键值的字典
-            func_id = list(m2l2i.keys())[0]
+        for i in range(len(m2l2i_list)):  # 列表中每一个元素是一个只有一个键值的字典
+            m2l2i = m2l2i_list[i]
+        # for m2l2i in m2l2i_list:
+            func_id = str(m2l2i[0])
             l2i_dict = dict()
-            l2i_list = m2l2i[func_id]
+            l2i_list = m2l2i[1]
             for l2i in l2i_list:
-                l2i_dict.update(l2i)
+                local_id = str(l2i[0])
+                l2i[1] = [str(identifier_id) for identifier_id in l2i[1]]
+                l2i_dict[local_id] = l2i[1]
             m2l2i_dict[func_id] = l2i_dict
-
-        print("-----getting all method_local_identifier successfully!-----")
+            print("\r", end="")
+            print("get_all_local_identifier progress: {}%: ".format(
+                (i+1)*100 // len(m2l2i_list)), "▋" * ((i+1)*100 // len(m2l2i_list) // 2), end="")
+            sys.stdout.flush()
+        # print("-----getting all method_local_identifier successfully!-----")
+        print("\r")
         return m2l2i_dict
 
     except Exception as e:
@@ -243,7 +320,7 @@ def draw_graph(func_id, dot_g, id2node, callee_dict, type):
         id2node[id]['funcid'] = func_id  # 为所有结点加入它所在函数的id
         id2node[id]['filename'] = filename  # 为所有结点加入它所在的文件名
         # id2node中的id是数字，但dot文件中的id是字符串
-        id2node[id]['id'] = str(id2node[id]['id'])
+        # id2node[id]['id'] = str(id2node[id]['id'])
         if type == 'pdg':
             if id2node[id]["_label"] == "CALL" and id2node[id]["name"].find("<operator>.") == -1:
                 if id in callee_dict:
@@ -284,6 +361,8 @@ def add_local_to_pdg(func_id, pdg, ast, l2i_dict, id2node):
             continue
         prop = generate_prop_for_node(id2node[local_id])
         pdg.add_vertex(local_id, **prop)
+        local_node = ast.vs.find(local_id)
+        local_node['IsPdgNode'] = True
         pdg.add_edge(func_id, local_id)
         for identifier_id in identifier_list:
             identifier_node = ast.vs.find(id=str(identifier_id))
@@ -311,6 +390,7 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
     # 每个pdg生成一个igraph对象并存储在pkl文件中，对于pdg中的call结点，还会记录其callee信息，最终每个pkl的文件名为funcname_funcid
     # 每个ast文件同样如此
     try:
+        i = 0
         for func_id in pdg_dict:
             pdg = draw_graph(
                 func_id, pdg_dict[func_id], id2node, callee_dict, "pdg")
@@ -324,8 +404,8 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
                 continue
             add_local_to_pdg(func_id, pdg, ast, m2l2i_dict[func_id], id2node)
 
-            pdg.es["curved"] = False  # 解决Attribute does not exist问题
-            igraph.plot(pdg, vertex_label=pdg.vs['code'])
+            # pdg.es["curved"] = False  # 解决Attribute does not exist问题
+            # igraph.plot(pdg, vertex_label=pdg.vs['code'])
             func_file_path = id2node[func_id]['filename']
             func_name = id2node[func_id]['name']
             func_file_dir, func_file_name = os.path.split(func_file_path)
@@ -346,7 +426,13 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
             with open(ast_file_path, "wb+")as f1:
                 pickle.dump(ast, f1)
 
-        print(f"-----completing pdg、ast successfully!-----")
+            print("\r", end="")
+            print("complete_graph progress: {}%: ".format(
+                (i+1)*100 // len(pdg_dict)), "▋" * ((i+1)*100 // len(pdg_dict) // 2), end="")
+            sys.stdout.flush()
+            i += 1
+        print('\r')
+        # print(f"-----completing pdg、ast successfully!-----")
     except Exception as e:
         print(f"-----completing pdg、ast failed!-----")
         print(e)
@@ -422,7 +508,7 @@ def complete_graph(pdg_dict, ast_dict, id2node, callee_dict, graph_db_dir, m2l2i
 
 if __name__ == '__main__':
     # 所有结点id以字符串形式存储，这是因为从dot文件中解析出来的id是字符串形式的
-    joern_parse_dir = '/home/wanghu/new_joern/v1_1_580/joern-parse'  # 需根据自己的环境进行修改
+    joern_parse_dir = '/home/wanghu/new_joern/v1_1_609/joern-parse'  # 需根据自己的环境进行修改
 
     cwd_dir = os.getcwd()
     raw_dir = cwd_dir+"/raw"  # 源文件目录,需手动创建
@@ -465,9 +551,3 @@ if __name__ == '__main__':
     # complete_graph(ast_dict, id2node, callee_dict, graph_db_dir, "ast")
 
     # joern_parse(joern_parse_dir,raw_dir,bin_path)
-
-
-# 待完成：
-# 1 处理call相关信息的存储目录
-# 2 过滤函数声明的结点
-# 3 统一id的类型
