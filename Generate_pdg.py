@@ -1,25 +1,20 @@
-
 import pickle
-from subprocess import call
-from xml.dom.minicompat import NodeList
 
 from cpgqls_client import *
 import json
 
 import os
 import igraph
-import pydot
 import sys
 import re
 import multiprocessing
 import datetime
-import math
 
 
-def print_process(name, now, sum):
+
+def print_process(name, now, sum):  # 打印进度条
     print("\r", end="")
-    print(f"{name} progress: {now}/{sum} {now*100 // sum}% ",
-          "▋" * (now*100 // sum//2), end="")
+    print(f"{name} progress: {now}/{sum} {now*100 // sum}% ", "▋" * (now*100 // sum//2), end="")
     sys.stdout.flush()
 
 
@@ -32,12 +27,9 @@ def joern_parse(joern_parse_dir, indir, outdir):
     #     print("----- warning:the bin file exists!-----")
     #     # print(outdir+" exists!")
     #     return
-    print(f'sh {joern_parse_dir} {indir} -o {outdir}')
     ret = os.system(f'sh {joern_parse_dir} {indir} -o {outdir}')
     if ret == 0:
-        print("joern_parse progress: {}%: ".format(100), "▋" * (50))
-
-        # print("-----joern parsing successfully!-----")
+        print("joern_parse progress: {}%: ".format(100), "▋" * 50)
     else:
         print("-----joern parsing failed!-----")
         sys.exit(0)
@@ -49,8 +41,7 @@ def connect_server():
     # 端口和用户名密码可修改，参照https://docs.joern.io/server
     server_endpoint = "localhost:8080"
     basic_auth_credentials = ("username", "password")
-    client = CPGQLSClient(
-        server_endpoint, auth_credentials=basic_auth_credentials)
+    client = CPGQLSClient(server_endpoint, auth_credentials=basic_auth_credentials)
     return client
 
 
@@ -58,7 +49,6 @@ def import_souce(client, file_path):
     # file_path为需要导入的bin文件路径
     # 该函数执行完之后，cpg被加载进joern server
 
-    # query = open_query(file_path) 考虑兼容性，使用下面的查询指令
     query = f'importCpg(\"{file_path}\")'
     try:
         result = client.execute(query)
@@ -66,8 +56,7 @@ def import_souce(client, file_path):
             print('joern server error:'+result['stderr'])
             sys.exit(0)
         else:
-            print("import_souce progress: {}%: ".format(
-                100), "▋" * (50))
+            print("import_souce progress: {}%: ".format(100), "▋" * 50)
     except Exception as e:
         print("-----import souce nodes failed!-----")
         print(e)
@@ -77,17 +66,9 @@ def import_souce(client, file_path):
     # print(result['stdout'])
 
 
-# def multi_process_get_nodes(node_list):
-#     id2node = dict()
-#     for node in node_list:
-#         node['id'] = str(node['id'])
-#         id2node[node['id']] = node
-#     return id2node
-
-
 def get_all_nodes(client, node_list_path):
     # node_list_path 存储所有结点的文件路径
-    # 该函数返回一个字典，其key为结点id，内容为joern导出的对应结点信息的字典
+    # 该函数返回一个字典，格式:{func_id:{id:node}}
     query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
     .filterNot(node => node.name.contains(\"<\"))\
     .filterNot(node => node.lineNumber==node.lineNumberEnd)\
@@ -96,7 +77,6 @@ def get_all_nodes(client, node_list_path):
     .filterNot(node => node.columnNumber==None)\
     .filterNot(node => node.columnNumberEnd==None)\
     .map(node => List(node.id,node.ast.l)).toJson  |>\"{node_list_path}\""
-    # print(query)
     try:
         result = client.execute(query)
         # print('client:'+result['stderr'])
@@ -107,16 +87,6 @@ def get_all_nodes(client, node_list_path):
             node_list = json.load(f)
 
         m2id2node = dict()  # 该字典使用id作为key,对应结点信息作为内容
-        # multi_list = list()
-        # for i in range(math.ceil(len(node_list)/5000)):
-        #     multi_list.append(node_list[i*5000:(i+1)*5000])
-        # i = 1
-        # with multiprocessing.Pool(8) as p:
-        #     ret = p.imap_unordered(multi_process_get_nodes, multi_list)
-        #     for ret_dict in ret:
-        #         id2node.update(ret_dict)
-        #         print_process('get_all_nodes', i, len(node_list))
-        #         i += 1
         i = 1
         for tup in node_list:
             func_id = str(tup[0])
@@ -135,23 +105,12 @@ def get_all_nodes(client, node_list_path):
         print("-----getting all nodes failed!-----")
         print(e)
         sys.exit(0)
-    # # print(method_list[0])
-
-
-def del_code(matched_str):
-    new_str = matched_str.group()[0:14]
-    new_str += "\"]"
-    return new_str
-
-
-
-
 
 
 def get_all_dotfile(client, raw_dir, dotfile_path):
-    # raw_dir 源代码目录，用来过滤库函数的pdg
+    # raw_dir 源代码目录，用来过滤库函数
     # dotpdg_path 生成的存储dot文件的json文件路径
-    # 该函数返回个字典，key:函数id 内容：该函数的pdg dot
+    # 该函数返回一个列表：[[func_id,func_pdg_str,func_ast_str]
 
     query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
     .filterNot(node => node.name.contains(\"<\"))\
@@ -161,18 +120,15 @@ def get_all_dotfile(client, raw_dir, dotfile_path):
     .filterNot(node => node.columnNumber==None)\
     .filterNot(node => node.columnNumberEnd==None)\
     .map(node => List(node.id,node.dotPdg.l,node.dotAst.l)).toJson |>\"{dotfile_path}\""
-    # query = f"cpg.method.map(c => (c.id,c.dotPdg.toJson)).toJson |>\"{dotpdg_path}\""
-    # print(query)
+
     try:
         result = client.execute(query)
-        # print('client:'+result['stderr'])
         if result['stderr'].find('java') != -1:
             print('joern server error:'+result['stderr'])
             sys.exit(0)
 
         with open(dotfile_path)as f:
             dot_list = json.load(f)
-
         return dot_list
 
     except Exception as e:
@@ -183,7 +139,7 @@ def get_all_dotfile(client, raw_dir, dotfile_path):
 
 def get_all_callee(client, raw_dir, callee_path):
     # callee_path 是存储callee信息的json文件路径
-    # 该函数返回一个字典，key:caller id 内容callee id
+    # 该函数返回一个字典，{func_id:{caller_id:calleeid}}
     query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
     .filterNot(node => node.name.contains(\"<\"))\
     .filterNot(node => node.lineNumber==node.lineNumberEnd)\
@@ -248,17 +204,12 @@ def get_all_callIn(client, raw_dir, callIn_path, call_info_dir):
         callIn_dict = dict()
         for i in range(len(callIn_list)):
             list_t = callIn_list[i]
-        # for list_t in callIn_list:
             func_id = str(list_t[0])
             for j in range(len(list_t[1])):
                 list_t[1][j] = [str(id) for id in list_t[1][j]]
             callIn_dict[func_id] = list_t[1]
             print_process('get_all_callIn', i+1, len(callIn_list))
-            # print("\r", end="")
-            # print("get_all_callIn progress: {}%: ".format(
-            #     (i+1)*100 // len(callIn_list)), "▋" * ((i+1)*100 // len(callIn_list) // 2), end="")
-            # sys.stdout.flush()
-        # print("-----getting all callIn successfully!-----")
+
         call_info_file = call_info_dir+"/callIn_dict.pkl"
         with open(call_info_file, "wb+")as f1:
             pickle.dump(callIn_dict, f1)
@@ -282,15 +233,15 @@ def generate_prop_for_node(node):
         if key in node:
             prop[key] = node[key]
         else:
-            prop[key] = None
+            prop[key] = 0
     prop['Name'] = prop.pop('name')  # 因为igraph加入键值的时候会默认有一个'name',所以改成'Name'
     return prop
 
 
 def get_all_local_param_2_identifier(client, local2identifier_path, type):
-    # 获得所有local结点对应的identifier结点
+    # 获得所有local和parameter结点对应的identifier结点
     # local2identifier_path是临时文件的存储路径
-    # 该函数返回一个字典，其格式如下：{func_id:{local_id:[identifier_id]}}
+    # 该函数返回一个字典，其格式如下：{func_id:{local_id/para_id:[identifier_id]}}
     # 存在key值对应字典为空的情况，即{func_id:{}}，使用时需注意
     query = f"cpg.method.filter(node=>node.filename.contains(\"{raw_dir}\"))\
     .filterNot(node => node.name.contains(\"<\"))\
@@ -331,30 +282,26 @@ def get_all_local_param_2_identifier(client, local2identifier_path, type):
         sys.exit(0)
 
 
-def draw_graph(func_id, dot_g, id2node, callee_dict, type):
+def draw_graph(func_id, nodes, edges, id2node, callee_dict, type):
     # func_id：函数id
-    # dot_g：对应ast或pdg的dot对象
+    # nodes：结点id的列表
+    # edges：边的列表，[[start_id,end_id,label]]其中label仅存储CDG或DDG，AST边一般为''
     # id2node：所有结点的列表
     # callee_dict：存储callee信息的字典
     # type：标识pdg或ast
     # 该函数返回一个igraph对象
-    # func_name = id2node[func_id]['name']
     filename = id2node[func_id]['filename']
-    nodes = dot_g.get_nodes()
-    edges = dot_g.get_edges()
+
     if len(nodes) == 0:
-        # print(func_id, "has no node")
         return -1
     g = igraph.Graph(directed=True)
 
     # 加入所有结点
-    for node in nodes:
-        id = json.loads(node.get_name())
+    for id in nodes:
         id2node[id]['funcid'] = func_id  # 为所有结点加入它所在函数的id
         id2node[id]['filename'] = filename  # 为所有结点加入它所在的文件名
-        # id2node中的id是数字，但dot文件中的id是字符串
-        # id2node[id]['id'] = str(id2node[id]['id'])
-        if type == 'pdg':
+
+        if type == 'pdg':  # pdg中需加入callee信息
             if id in callee_dict:
                 id2node[id]["callee_id"] = callee_dict[id]
             id2node[id]['IsPdgNode'] = True
@@ -369,11 +316,8 @@ def draw_graph(func_id, dot_g, id2node, callee_dict, type):
 
     # 加入所有边
     for edge in edges:
-        start_node_id = json.loads(edge.get_source())
-        end_node_id = json.loads(edge.get_destination())
-        g.add_edge(start_node_id, end_node_id, **
-                   (edge.obj_dict['attributes']))
-        # func_id = json.loads(nodes[0].get_name())
+        label = {'label': edge[2]}
+        g.add_edge(edge[0], edge[1], **label)
 
     return g
 
@@ -382,9 +326,10 @@ def draw_graph(func_id, dot_g, id2node, callee_dict, type):
 def add_lp_to_pdg(func_id, pdg, ast, lp2i_dict, id2node):
     # func_id:函数id
     # pdg,ast:对应的pdg和ast的igraph对象
-    # l2i_dict:local对应的identifier列表 格式{local_id:[identifier_id]}
+    # l2i_dict:local对应的identifier列表 格式{local_id/para_id:[identifier_id]}
     # id2node:所有结点的列表
     # 该函数将local结点加入pdg并加上相应的边
+    edge_prop = {'label': 'DDG'}
     for lp_id in lp2i_dict:
         identifier_list = lp2i_dict[lp_id]
         if len(identifier_list) == 0:  # 如果该local或parameter没有引用，则直接跳到下一个
@@ -394,7 +339,8 @@ def add_lp_to_pdg(func_id, pdg, ast, lp2i_dict, id2node):
             pdg.add_vertex(lp_id, **prop)
             local_node = ast.vs.find(lp_id)
             local_node['IsPdgNode'] = True
-            pdg.add_edge(func_id, lp_id)
+            # edge_prop={'label': 'DDG'}
+            pdg.add_edge(func_id, lp_id, **edge_prop)
         for identifier_id in identifier_list:
             identifier_node = ast.vs.find(id=identifier_id)
             candidate_node = identifier_node
@@ -407,21 +353,38 @@ def add_lp_to_pdg(func_id, pdg, ast, lp2i_dict, id2node):
                     if candidate_node['_label'] == 'METHOD':  # 找到method结点,即ast的根节点
                         break
                     else:
-                        candidate_node = candidate_node.predecessors()[
-                            0]  # 继续向上找
+                        candidate_node = candidate_node.predecessors()[0]  # 继续向上找
             if find:
                 if pdg.are_connected(lp_id, end_id) == False:
-                    pdg.add_edge(lp_id, end_id)
+                    pdg.add_edge(lp_id, end_id, **edge_prop)
+
+
+def mydot_parser(dot_str):
+    # dot_str：原始的dot文件字符串
+    # 仅提取边集，且对于边的label仅提取CDG或DDG
+    # 使用提取的边集获得点集
+    re_pattern = re.compile(
+        r'"([0-9]+)" -> "([0-9]+)"(?:  \[ label = "([C|D]DG):[\s\S]*?"\])*')
+
+    ret = re_pattern.findall(dot_str)
+
+    node_list = set()
+    edge_list = ret
+    for matched in ret:
+        node_list.add(matched[0])
+        node_list.add(matched[1])
+    return node_list, edge_list
 
 
 def multi_process_complete_graph(para_list):
+    # 多进程函数，用来完善每个函数的pdg
     func_id, pdg_str, ast_str, id2node, callee_dict, graph_db_dir, lp2i_dict = para_list
-    pdg_g = pydot.graph_from_dot_data(pdg_str)[0]
-    pdg = draw_graph(func_id, pdg_g, id2node, callee_dict, "pdg")
-    if pdg==-1:
+    pdg_nodes, pdg_edges = mydot_parser(pdg_str)
+    pdg = draw_graph(func_id, pdg_nodes, pdg_edges, id2node, callee_dict, "pdg")
+    if pdg == -1:
         return
-    ast_g = pydot.graph_from_dot_data(ast_str)[0]
-    ast = draw_graph(func_id, ast_g, id2node, callee_dict, "ast")
+    ast_nodes, ast_edges = mydot_parser(ast_str)
+    ast = draw_graph(func_id, ast_nodes, ast_edges, id2node, callee_dict, "ast")
 
     add_lp_to_pdg(func_id, pdg, ast, lp2i_dict, id2node)
 
@@ -466,10 +429,8 @@ def complete_graph(dot_list, m2id2node, m2callee_dict, graph_db_dir, m2lp2i_dict
                 id2node = m2id2node[func_id]
                 callee_dict = m2callee_dict[func_id]
                 lp2i_dict = m2lp2i_dict[func_id]
-                multi_para_list.append(
-                    [func_id, pdg_str, ast_str, id2node, callee_dict, graph_db_dir, lp2i_dict])
-            ret_list = p.imap_unordered(
-                multi_process_complete_graph, multi_para_list)
+                multi_para_list.append([func_id, pdg_str, ast_str, id2node, callee_dict, graph_db_dir, lp2i_dict])
+            ret_list = p.imap_unordered(multi_process_complete_graph, multi_para_list)
             for ret in ret_list:
                 print_process('complete_graph', i, len(multi_para_list))
                 i += 1
@@ -510,13 +471,12 @@ if __name__ == '__main__':
     callIn_dict = get_all_callIn(client, raw_dir, callIn_path, call_info_dir)
 
     callee_list_path = intermediate_dir+"/callee.json"  # 存储callee信息的json文件
-    m2callee_dict = get_all_callee(client, raw_dir,callee_list_path)
+    m2callee_dict = get_all_callee(client, raw_dir, callee_list_path)
 
     m2l2i_path = intermediate_dir+"/m2l2i.json"
     m2l2i_dict = get_all_local_param_2_identifier(client, m2l2i_path, "local")
     m2p2i_path = intermediate_dir+"/m2p2i.json"
-    m2p2i_dict = get_all_local_param_2_identifier(
-        client, m2p2i_path, "parameter")
+    m2p2i_dict = get_all_local_param_2_identifier(client, m2p2i_path, "parameter")
 
     # 将local和parameter合并
     for func_id in m2l2i_dict:
@@ -527,17 +487,14 @@ if __name__ == '__main__':
     m2id2node = get_all_nodes(client, node_list_path)
 
     dot_list_path = intermediate_dir+"/dot.json"  # 存储所有 pdg dot的json文件
-    # t1 = datetime.datetime.now()
+
     dot_list = get_all_dotfile(client, raw_dir, dot_list_path)
     t1 = datetime.datetime.now()
-    # print((t2-t1).seconds)
+
     # 根据以上信息生成igraph形式的pdg、ast,并按照源代码目录结构存储
-    complete_graph(dot_list, m2id2node, m2callee_dict,graph_db_dir, m2l2i_dict)
-    # complete_graph(ast_dict, id2node, callee_dict, graph_db_dir, "ast")
-    t2= datetime.datetime.now()
+    complete_graph(dot_list, m2id2node, m2callee_dict, graph_db_dir, m2l2i_dict)
+
+    t2 = datetime.datetime.now()
     print((t2-t1).seconds)
 
     # joern_parse(joern_parse_dir,raw_dir,bin_path)
-
-
-#
