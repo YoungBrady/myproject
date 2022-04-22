@@ -233,7 +233,7 @@ def generate_prop_for_node(node):
         if key in node:
             prop[key] = node[key]
         else:
-            prop[key] = 0
+            prop[key] = None
     prop['Name'] = prop.pop('name')  # 因为igraph加入键值的时候会默认有一个'name',所以改成'Name'
     return prop
 
