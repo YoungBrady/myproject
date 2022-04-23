@@ -1,6 +1,6 @@
 
 一个有用的issue[https://github.com/joernio/joern/issues/585]
-# 目前发现的问题
+# 目前发现的问题（在joernv1.1.744上测试)
 ## 1.wchar_t* 的识别有问题
 
 源文件：CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_memmove_10.c
