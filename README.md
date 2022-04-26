@@ -1,7 +1,7 @@
 
 一个有用的issue[https://github.com/joernio/joern/issues/585]
 # 目前发现的问题（在joernv1.1.744上测试)
-## 1.wchar_t* 的识别有问题
+## 1.wchar_t* 的识别有问题(v1.1.751已解决）
 
 源文件：CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_memmove_10.c
 ```
@@ -24,7 +24,7 @@ res9: List[String] = List(
 ```
 这就导致在提取指针关注点时无法提取到这些关注点
 
-## 2.对c++引用传参的识别存在问题
+## 2.对c++引用传参的识别存在问题（v1.1.751参数类型已修改，但是调用关系还是存在问题）
 
 源文件：CWE190_Integer_Overflow__int_fgets_square_43.cpp
 ```
