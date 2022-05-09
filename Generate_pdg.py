@@ -375,6 +375,35 @@ def mydot_parser(dot_str):
         node_list.add(matched[1])
     return node_list, edge_list
 
+def store_pdg_ast(func_file_path,func_name,func_id,pdg,ast,graph_db_dir):
+    #func_file_path 源代码路径
+    # func_name 函数名
+    # func_id 函数id
+
+    func_file_dir, func_file_name = os.path.split(func_file_path) #分离获得文件的目录
+    index = len(graph_db_dir)-len("graph_db")+len("raw") #获得raw文件夹之后的路径在字符串中的起点
+    dir_list=func_file_path[index:].split('/')#列表中第一个为空，第二个为raw的子目录。
+
+    pkl_dir = graph_db_dir+'/'+dir_list[1]
+    pressed_path=dir_list[2]
+    for i in range(3,len(dir_list)):#压缩后续目录为一个目录，目录名用_连接
+        pressed_path=pressed_path+'_'+pkl_dir[i]
+    pkl_dir=pkl_dir+pressed_path
+
+    pdg_pkl_dir = f"{pkl_dir}/pdg"
+    ast_pkl_dir = f"{pkl_dir}/ast"
+    if os.path.exists(pdg_pkl_dir) == False:
+        os.makedirs(pdg_pkl_dir)
+    pdg_file_path = pdg_pkl_dir+f"/{func_name}_{func_id}.pkl"
+    # print(pdg_file_path)
+    with open(pdg_file_path, "wb+")as f1:
+        pickle.dump(pdg, f1)
+    if os.path.exists(ast_pkl_dir) == False:
+        os.makedirs(ast_pkl_dir)
+    ast_file_path = ast_pkl_dir+f"/{func_name}_{func_id}.pkl"
+    # print(pdg_file_path)
+    with open(ast_file_path, "wb+")as f1:
+        pickle.dump(ast, f1)
 
 def multi_process_complete_graph(para_list):
     # 多进程函数，用来完善每个函数的pdg
@@ -392,23 +421,7 @@ def multi_process_complete_graph(para_list):
     # igraph.plot(pdg, vertex_label=pdg.vs['code'])
     func_file_path = id2node[func_id]['filename']
     func_name = id2node[func_id]['name']
-    func_file_dir, func_file_name = os.path.split(func_file_path)
-    index = func_file_dir.find('/raw')
-    pkl_dir = graph_db_dir+func_file_dir[index+4:]
-    pdg_pkl_dir = f"{pkl_dir}/pdg"
-    ast_pkl_dir = f"{pkl_dir}/ast"
-    if os.path.exists(pdg_pkl_dir) == False:
-        os.makedirs(pdg_pkl_dir)
-    pdg_file_path = pdg_pkl_dir+f"/{func_name}_{func_id}.pkl"
-    # print(pdg_file_path)
-    with open(pdg_file_path, "wb+")as f1:
-        pickle.dump(pdg, f1)
-    if os.path.exists(ast_pkl_dir) == False:
-        os.makedirs(ast_pkl_dir)
-    ast_file_path = ast_pkl_dir+f"/{func_name}_{func_id}.pkl"
-    # print(pdg_file_path)
-    with open(ast_file_path, "wb+")as f1:
-        pickle.dump(ast, f1)
+    store_pdg_ast(func_file_path,func_name,func_id,pdg,ast,graph_db_dir)
 
 
 def complete_graph(dot_list, m2id2node, m2callee_dict, graph_db_dir, m2lp2i_dict):
