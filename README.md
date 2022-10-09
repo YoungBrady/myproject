@@ -67,6 +67,8 @@ res12: List[MethodParameterIn] = List(
 ## 4.函数指针识别不了
 ## 5.类的成员函数识别不了调用关系
 
+## 6.luckkeke's fork test: what a nice tiger!
+
 
 
 
